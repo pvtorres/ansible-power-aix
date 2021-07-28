@@ -112,7 +112,7 @@ EXAMPLES = r'''
     state: absent
     name: ansible
 
-- name: Modify group's attributes
+- name: Modify group attributes
   ibm.power_aix.group:
     state: modify
     name: ansible
