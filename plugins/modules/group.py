@@ -229,7 +229,7 @@ def modify_group(module):
         result['stderr'] = stderr
         if rc != 0:
             # 3004-641.User is not in member list. (Not a problem: idempotency)
-            pattern="3004-641"
+            pattern = "3004-641"
             found = re.search(pattern, stderr)
 
             if not found:
@@ -243,8 +243,6 @@ def modify_group(module):
             msg += "\n%s list for group: %s SUCCESSFULLY modified." % (module.params['user_list_type'], module.params['name'])
         else:
             msg += "\n%s list for group: %s was not modified." % (module.params['user_list_type'], module.params['name'])
-
-
 
     return msg
 
@@ -336,6 +334,7 @@ def group_exists(module):
     else:
         return False
 
+
 def get_group_attributes(module):
     """
     Retrieve all group attributes
@@ -346,7 +345,6 @@ def get_group_attributes(module):
     """
     cmd = ["lsgroup"]
     cmd += [module.params['name']]
-
     rc, out, err = module.run_command(cmd)
 
     return out
