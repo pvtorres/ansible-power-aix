@@ -349,6 +349,7 @@ def get_group_attributes(module):
 
     return out
 
+
 def main():
     """
     Main function
