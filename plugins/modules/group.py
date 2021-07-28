@@ -91,7 +91,7 @@ EXAMPLES = r'''
     state: present
     name: ansible
     user_list_action: 'add'
-    user_list_type: 'member'
+    user_list_type: 'members'
     users_list: 'test1'
 '''
 
@@ -119,7 +119,7 @@ stderr':
     type: str
 '''
 
-
+import re
 from ansible.module_utils.basic import AnsibleModule
 
 result = None
@@ -150,6 +150,9 @@ def modify_group(module):
         if load_module_opts is not None:
             opts = load_module_opts + opts
         cmd = "chgroup %s %s" % (opts, module.params['name'])
+
+        init_props = get_group_attributes(module)
+
         rc, stdout, stderr = module.run_command(cmd)
 
         result['cmd'] = ' '.join(cmd)
@@ -159,8 +162,13 @@ def modify_group(module):
         if rc != 0:
             result['msg'] += "\nFailed to modify attributes for group: %s." % module.params['name']
             module.fail_json(**result)
-        else:
+
+        if init_props != get_group_attributes(module):
+            result['changed'] = True
             msg = "\nGroup: %s attributes SUCCESSFULLY set." % module.params['name']
+        else:
+            msg = "\nGroup: %s attributes were not changed." % module.params['name']
+            result['changed'] = False
 
     if module.params['user_list_action']:
         cmd = "chgrpmem "
@@ -188,6 +196,7 @@ def modify_group(module):
         cmd += ",".join(module.params['users_list'])
         cmd = cmd + " " + module.params['name']
 
+        init_props = get_group_attributes(module)
         rc, stdout, stderr = module.run_command(cmd)
 
         result['cmd'] = cmd
@@ -195,10 +204,23 @@ def modify_group(module):
         result['stdout'] = stdout
         result['stderr'] = stderr
         if rc != 0:
-            result['msg'] += "\nFailed to modify %s list for group: %s." % (module.params['user_list_type'], module.params['name'])
-            module.fail_json(**result)
-        else:
+            # 3004-641.User is not in member list. (Not a problem: idempotency)
+            pattern="3004-641"
+            found = re.search(pattern, stderr)
+
+            if not found:
+                result['msg'] += "\nFailed to modify %s list for group: %s." % (module.params['user_list_type'], module.params['name'])
+                module.fail_json(**result)
+            else:
+                result['rc'] = 0
+
+        if init_props != get_group_attributes(module):
+            result['changed'] = True
             msg += "\n%s list for group: %s SUCCESSFULLY modified." % (module.params['user_list_type'], module.params['name'])
+        else:
+            msg += "\n%s list for group: %s was not modified." % (module.params['user_list_type'], module.params['name'])
+
+
 
     return msg
 
@@ -230,9 +252,10 @@ def create_group(module):
         module.fail_json(**result)
     else:
         msg = "Group: %s SUCCESSFULLY created." % module.params['name']
+        result['changed'] = True
 
     if module.params['group_attributes'] or module.params['user_list_action']:
-        result['msg'] += modify_group(module)
+        msg += modify_group(module)
 
     return msg
 
@@ -289,6 +312,20 @@ def group_exists(module):
     else:
         return False
 
+def get_group_attributes(module):
+    """
+    Retrieve all group attributes
+    arguments:
+        module(dict): The Ansible module
+    return:
+        standard output of lsgroup <group name>
+    """
+    cmd = ["lsgroup"]
+    cmd += [module.params['name']]
+
+    rc, out, err = module.run_command(cmd)
+
+    return out
 
 def main():
     """
@@ -327,7 +364,6 @@ def main():
     elif module.params['state'] == 'present':
         if not group_exists(module):
             result['msg'] = create_group(module)
-            result['changed'] = True
         else:
             result['msg'] = "Group %s already exists." % module.params['name']
 
@@ -337,7 +373,6 @@ def main():
         else:
             if group_exists(module):
                 result['msg'] = modify_group(module)
-                result['changed'] = True
             else:
                 result['msg'] = "No group found in the system to modify the attributes: %s" % module.params['name']
                 module.fail_json(**result)
