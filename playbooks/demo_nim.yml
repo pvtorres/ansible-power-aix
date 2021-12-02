@@ -39,7 +39,7 @@
       register: result
     # - debug: var=result
 
-       - name: Configure the NIM master
+    - name: Configure the NIM master
       nim:
         action: master_setup
         device: "{{ master_setup_device_v }}"
@@ -114,7 +114,7 @@
         action: reboot
         targets: "{{ install_targets_v }}"
       register: result
-    - debug: var=result
+    # - debug: var=result
 
     - name: Perform a maintenance operation on standalone partition
       nim:
@@ -126,9 +126,9 @@
     - name: Query all standalone objects defined in a NIM master
       nim:
         action: show
-        obj_type: joker
+        obj_type: standalone
       register: result
-    - debug: var=result
+    # - debug: var=result
 
     - name: Get CState of '{{ install_targets_v }}'
       debug: var=result.meta.query[install_targets_v].Cstate
