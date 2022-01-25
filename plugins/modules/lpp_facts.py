@@ -16,7 +16,7 @@ DOCUMENTATION = r'''
 author:
 - AIX Development Team (@pbfinley1911)
 module: lpp_facts
-short_description: Returns installed software products/fixes as facts.
+short_description: Returns installed software products or fixes as facts.
 description:
 - Lists and returns information about installed filesets or fileset updates or fixes in Ansible facts.
 version_added: '2.9'
@@ -55,8 +55,13 @@ options:
   fix_type:
     description:
     - Specifies the type of fixes.
+    - C(all) lists all the fixes installed on the system.
+    - C(apar) lists only APAR fixes installed on the system.
+    - C(service_pack) (alias C(sp)) lists the fixes installed in the system in service packs.
+    - C(technology_level) (alias C(tl)) lists the fixes installed in the system as part of technology levels.
     - Mutually exclusive with fixes.
     type: str
+    choices: [ all, apar, service_pack, sp, technology_level, tl ]
     default: no
   fixes:
     description:
@@ -103,7 +108,8 @@ EXAMPLES = r'''
   debug:
     var: ansible_facts.fixes
     
-- name: Populate fixes facts with the fixes which the list of fixes .
+- name: Populate fixes facts for the list of fixes with keywords
+        7200-01_AIX_ML, IV82301, IV99819, 72-02-021832_SP .
   lpp_facts:
     fixes: 7200-01_AIX_ML, IV82301, IV99819, 72-02-021832_SP
 - name: Print the fixes facts
@@ -114,7 +120,7 @@ EXAMPLES = r'''
 RETURN = r'''
 ansible_facts:
   description:
-  - Facts to add to ansible_facts about the installed software products, fixes on the system
+  - Facts to add to ansible_facts about the installed software products or fixes on the system
   returned: always
   type: complex
   contains:
@@ -212,7 +218,7 @@ ansible_facts:
           - Abstract of the fix
           returned: always
           type: str
-          sample: "Arabic characters are corrupted in dthelpview"
+          sample: "clcomd generates coredump"
         filesets:
           description:
           - Maps the fileset level to the fixes information.
@@ -238,10 +244,10 @@ ansible_facts:
               type: str
             status:
               description:
-              - Down Level.
-              - Correct level.
-              - Superseded.
-              - not installed.
+              - C(Down Level) specifies that the fileset installed on the system is at a lower level than the required level
+              - C(Correct level) specifies that the fileset installed on the system is at the same level as the required level
+              - C(Superseded) specifies that the fileset installed on the system is at a higher level than the required level
+              - C(not installed) specifies that the fileset is not installed on the system
               returned: always
               type: str
 
