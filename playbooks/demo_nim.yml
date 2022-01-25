@@ -30,7 +30,7 @@
       register: result
     # - debug: var=result
 
-    - name: BOS installation using a group resource a customization script
+    - name: BOS installation using a group resource and customization script
       nim:
         action: bos_inst
         targets: "{{ install_targets_v }}"
@@ -126,7 +126,7 @@
     - name: Query all standalone objects defined in a NIM master
       nim:
         action: show
-        obj_type: standalone
+        object_type: standalone
       register: result
     # - debug: var=result
 
