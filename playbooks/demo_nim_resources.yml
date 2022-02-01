@@ -1,0 +1,111 @@
+---
+- name: "NIM operations to define, display and remove resource objects"
+  hosts: nim1
+  remote_user: root
+  gather_facts: no
+  vars:
+
+    alloc_resource_v:       lpp_source_test4
+    spot_name_v:            spot_test4
+    spot_final_location_v:  /nim1/spot_test4_from_lpp_source
+    lpp_source_v:           lpp_source_test4
+    software_lpp_source:    /nim1/lpp_source
+    lpp_source_location:    /nim1/lpp_source_test4
+
+
+  collections:
+  - ibm.power_aix
+  tasks:
+
+
+# Setup
+
+    - name: Setup- Remove the spot resource.
+      ibm.power_aix.nim_resource:
+        action: absent
+        name: "{{ spot_name_v }}"
+      register: result
+    - debug: var=result
+
+    - name: Setup- Remove the lpp_source.
+      ibm.power_aix.nim_resource:
+        action: absent
+        name: "{{ lpp_source_v }}"
+      register: result
+    - debug: var=result
+
+# Tests
+
+    - name: Create/define an lpp_source NIM resource object from the 
+            software in the system.
+      ibm.power_aix.nim_resource:
+        action: present
+        name: "{{ lpp_source_v }}"
+        object_type: lpp_source
+        source: "{{ software_lpp_source }}"
+        location: "{{ lpp_source_location}}"
+      register: result
+    - debug: var=result
+
+    - name: Create/define a spot object resource from an lpp_source nim object.
+      ibm.power_aix.nim_resource:
+        action: present
+        name: "{{ spot_name_v }}"
+        object_type: spot
+        source: "{{ lpp_source_v }}"
+        location: "{{ spot_final_location_v }}"
+      register: result
+    - debug: var=result
+
+    - name: Show a NIM resource object.
+      ibm.power_aix.nim_resource:
+        action: show
+        name: "{{ spot_name_v }}"
+      register: result
+    - debug: var=result
+
+    - name: Try to show a NIM resource object that does not exist.
+            (do not return an error)
+      ibm.power_aix.nim_resource:
+        action: show
+        name: i_dont_exist
+      register: result
+    - debug: var=result
+
+    - name: Show/display all the NIM spot resource objects.
+      ibm.power_aix.nim_resource:
+        action: show
+        object_type: spot
+      register: result
+    - debug: var=result
+
+    - name: Remove a NIM spot object resource.
+      ibm.power_aix.nim_resource:
+        action: absent
+        name: "{{ spot_name_v }}"
+      register: result
+    - debug: var=result
+
+    - name: Verify the spot object was removed.
+      ibm.power_aix.nim_resource:
+        action: show
+        name: "{{ spot_name_v }}"
+      register: result
+    - debug: var=result
+
+    - assert:
+        that:
+          - result.stderr is search("0042-053")
+        fail_msg: "The member {{spot_name_v }} was not removed."
+
+    - name: Remove an object resource again (idempotency)
+      ibm.power_aix.nim_resource:
+        action: absent
+        name: "{{ spot_name_v }}"
+      register: result
+    - debug: var=result
+
+    - name: End the playbook 1
+      meta: end_host
+
+
