@@ -311,6 +311,7 @@ def list_fixes(module):
     param module: Ansible module argument spec.
     return: dict fixes
     """
+
     
     fixes = {}
     cmd = []
@@ -518,6 +519,7 @@ def fileset_consistency_check(module, name):
         cons_check = "NOT OK"
     return cons_check
      
+    
 def main():
     module = AnsibleModule(
         argument_spec=dict(
@@ -601,7 +603,7 @@ def main():
             filesets[name]['levels'][level] = info
         else:
             filesets[name]['levels'][level]['sources'].append(fields[0])
- 
+
     fixes = {}
     if module.params["fix_type"] or module.params["fixes"]:
         fixes = list_fixes(module)
