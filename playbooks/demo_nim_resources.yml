@@ -42,8 +42,9 @@
         action: present
         name: "{{ lpp_source_v }}"
         object_type: lpp_source
-        source: "{{ software_lpp_source }}"
-        location: "{{ lpp_source_location}}"
+        attributes:
+          source: "{{ software_lpp_source }}"
+          location: "{{ lpp_source_location}}"
       register: result
     - debug: var=result
 
@@ -52,8 +53,9 @@
         action: present
         name: "{{ spot_name_v }}"
         object_type: spot
-        source: "{{ lpp_source_v }}"
-        location: "{{ spot_final_location_v }}"
+        attributes:
+          source: "{{ lpp_source_v }}"
+          location: "{{ spot_final_location_v }}"
       register: result
     - debug: var=result
 
@@ -63,6 +65,12 @@
         name: "{{ spot_name_v }}"
       register: result
     - debug: var=result
+
+    - name: Verify the resource is exist.
+      assert:
+        that:
+          - "{{ result.nim_resource_found}}""
+        fail_msg: "The member {{ spot_name_v }} was not found"
 
     - name: Try to show a NIM resource object that does not exist.
             (do not return an error)
@@ -105,7 +113,7 @@
       register: result
     - debug: var=result
 
-    - name: End the playbook 1
-      meta: end_host
+#    - name: End the playbook 1
+#      meta: end_host
 
 

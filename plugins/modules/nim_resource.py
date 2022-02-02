@@ -5,7 +5,7 @@
 # GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
 
 """
- Module to display, create and remove nim resources
+ Module to show, create or remove NIM object resources
 """
 
 from __future__ import absolute_import, division, print_function
@@ -23,74 +23,95 @@ DOCUMENTATION = r'''
 author:
 - AIX Development Team (@pvtorres1703)
 module: nim_resource
-short_description: Display/define/delete nim object resources
+short_description: show/define/delete nim object resources
 description:
 - This module facilitates the display/creation/removal of nim resources 
 - Root user is required.
 options:
   action:
     description:
-    - Specifies the action to be performed for the tunables.
-    - C(show) displays the current nim allocated resources
-    - C(present) creates a nim resource.
-    - C(absent) remove a nim resource
+    - Specifies the action to be performed:
+    - C(show) shows  NIM resource object or a NIM resource provied by I(name)
+      into a "nim_resources" type=dic .
+    - C(present) define (create) a NIM resource object with provied I(name),
+      I(object_type) and I(attributes).
+    - C(absent) remove a NIM resource object with provided I(name).
     type: str
-    choices: [ show, display, present, absent ]
+    choices: [ show, present, absent ]
     default: None
     required: true
   name:
     description:
-    - Specifies the resource name
+    - Specifies the NIM object name.
     type: str
     default: None
     required: true
   object_type:
     description:
-    - Type of the resource to be allocated. Example: spot, lpp_source
-    - It must be provided when "action" option is "created" or "delete"
+    - Type of the resource for action I(state=present), I(state=absent),
+      I(state=show).
+    - Example of the object_types:
+      -- lpp_source
+      -- spot
+      -- bosinst_data
+      -- mksysb
+      -- fb_script
+      -- res_group
+    - For details of the supported resources, refer to the IBM documentation at
+      U(https://www.ibm.com/docs/en/aix/7.2?topic=management-using-nim-resources)
     type: str
     default: None
-    required: true
-  source:
-    descrition:
-    - Specifies the path of the LPP source
-    type: path
-    required: no
-  location:
-    descrition:
-    - Specifies the path of the software code to create the resource.
-    type: path
-    required: no
+    required: false
+  attributes:
+    description:
+    - Specifies the attribute-value pairs for I(state=present) or I(state=show)
+    - Examples:
+      - source: Source device, absolute path for the images or ISO image to
+                create a copy to the "location"
+      - location: Specifies directory that contatins the code to define
+                the resource.
+    default: None
+    required: None
+
 '''
 
 
 EXAMPLES = r'''
-- hosts: nim_server
-  gather_facts: no
-- tasks:
 
-  - name: Display/show all NIM objects.
+  - name: Show all NIM resource objects.
     ibm.power_aix.nim_resource:
       action: show
 
-  - name: Define a NIM lpp_source resource
+  - name: Create a copy of the images from source to location and
+          define a NIM lpp_source resource from the location.
     ibm.power_aix.nim_resource:
       action: present
       name: lpp_730
       object_type: lpp_resource
-      source: /software/AIX7300
-      location: /nim1/lpp_730_resource
+      attributes:
+        source: /software/AIX7300
+        location: /nim1/copy_AIX7300_resource
 
-  - name: Define a NIM spot (Shared product Object Tree)
-          using and defined lpp_source.
+  - name: Define a NIM lpp_source resource from a directory that
+          contains the installation images.
+    ibm.power_aix.nim_resource:
+      action: present
+      name: lpp_730
+      object_type: lpp_resource
+      attributes:
+        location: /nim1/copy_AIX7300_resource
+
+  - name: Define a NIM spot (Shared product Object Tree) resource
+          using a defined lpp_source.
     ibm.power_aix.nim_resource:
       action: present
       name: spot_730
       object_type: spot
-      location: /nim1/spot_730_resource
-      source: lpp_730
+      attributes:
+        source: lpp_730
+        location: /nim1/spot_730_resource
 
-  - name: Display/show a NIM object resource.
+  - name: Show a NIM resource object.
     ibm.power_aix.nim_resource:
       action: show
       name: lpp_730
@@ -131,14 +152,14 @@ results = None
 
 def res_show(module):
     '''
-    Display nim resources.
+    Show nim resources.
 
     arguments:
         module  (dict): The Ansible module
     note:
         Exits with fail_json in case of error
     return:
-        Message for successfull command
+        Message for successful command
     '''
 
     global results
@@ -148,7 +169,8 @@ def res_show(module):
     name = module.params['name']
     object_type = module.params['object_type']
 
-    # This module will only display general information about resource object class
+    # This module will only show general information about the resource
+    # object class.
     if not object_type and not name:
         cmd += ' -c resources'
 
@@ -163,9 +185,12 @@ def res_show(module):
     results['stderr'] = stderr
     results['stdout'] = stdout
     results['cmd'] = cmd
+    results['nim_resources'] = {}
+    results['nim_resource_found'] = '0'
 
     if return_code != 0:
 
+        # 0042-053 The NIM objefct is not there.
         pattern = "0042-053"
         found = re.search(pattern, stderr)
 
@@ -175,37 +200,40 @@ def res_show(module):
             results['msg'] = 'Error trying to display object {0}'.format(name)
             results['rc'] = return_code
             module.fail_json(**results)
+    else:
+        results['nim_resources'] = build_dic(stdout)
+        results['nim_resource_found'] = '1'
 
     return 0
 
 def res_present(module):
     '''
-    Createa a NIM resource.
+    Define a NIM resource object.
 
     arguments:
         module  (dict): The Ansible module
     note:
         Exits with fail_json in case of error
     return:
-        Message for successfull command
+        Message for successful command
     '''
 
     cmd = '/usr/sbin/nim -a server=master -o define '
     msg = ''
+    opts = ""
     changed = True
+
     name = module.params['name']
     object_type = module.params['object_type']
-    source = module.params['source']
-    location = module.params['location']
+    attributes = module.params['attributes']
 
     if object_type:
         cmd += ' -t ' + object_type
 
-    if source:
-        cmd += ' -a source=' + source
-
-    if location:
-        cmd += ' -a location=' + location
+    if attributes is not None:
+        for attr, val in attributes.items():
+             opts += " -a %s=\"%s\" " % (attr, val)
+        cmd += opts
 
     if name:
         cmd += ' ' + name
@@ -218,6 +246,7 @@ def res_present(module):
 
     if return_code != 0:
 
+       # 0042-081 The resource already exists on "master"
         pattern = "0042-081"
         found = re.search(pattern, stderr)
         if not found:
@@ -234,7 +263,7 @@ def res_present(module):
 
 def res_absent(module):
     '''
-    Remove a NIM resource.
+    Remove a NIM resource object.
 
     arguments:
         module  (dict): The Ansible module
@@ -257,6 +286,7 @@ def res_absent(module):
 
     if return_code != 0:
 
+        # 0042-053 The NIM objefct is not there.
         pattern = "0042-053"
         found = re.search(pattern, stderr)
 
@@ -273,19 +303,45 @@ def res_absent(module):
     return 0
 
 
+def build_dic(stdout):
+    """
+    Build dictionary with the stdout info
+
+    arguments:
+        stdout   (str): stdout of the command to parse
+    returns:
+        info    (dict): NIM object dictionary
+    """
+
+    info1 = {}
+    info = {}
+
+    lines = stdout.splitlines()
+
+    for line in lines :
+
+        key = (line.split('=')[0]).strip()
+        size = len( line.split('='))
+
+        if size > 1:
+            value = (line.split('=')[1]).strip()
+            info1[key] = value
+        else:
+            info[key[:-1]] = info1
+            info1.clear()
+
+    return info
+
 def main():
     global results
     module = AnsibleModule(
         argument_spec=dict(
-            action=dict(type='str', required=True, choices=['show', 'display', 'present', 'absent']),
+            action=dict(type='str', required=True, choices=['show', 'present', 'absent']),
             name=dict(type='str'),
             object_type=dict(type='str'),
-            source=dict(type='path'),
-            location=dict(type='path'),
+            attributes=dict(type='dict'),
         ),
-#        mutally_exclusive=[
-#           ["object_type", "bbb"]
-#        ],
+# TODO support check_mode ??
         supports_check_mode=False
     )
 
@@ -297,18 +353,8 @@ def main():
     )
 
     msg = ""
-    msg_temp = ""
 
     action = module.params['action']
-
-    if action == 'display':
-        action = 'show'
-
-    if action == 'remove':
-        action = 'absent'
-
-    if action == 'allocate':
-        action = 'present'
 
     if action == 'show':
         res_show(module)
