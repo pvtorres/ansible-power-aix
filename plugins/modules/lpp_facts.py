@@ -18,7 +18,7 @@ author:
 module: lpp_facts
 short_description: Returns installed software products or fixes as facts.
 description:
-- Lists and returns information about installed filesets or fileset updates or fixes in Ansible facts.
+- Lists and returns information about installed filesets, fileset updates or fixes in Ansible facts.
 version_added: '2.9'
 requirements:
 - AIX >= 7.1 TL3
@@ -50,6 +50,11 @@ options:
     description:
     - Limits listings to base level filesets (no updates returned).
     - Mutually exclusive with I(all_updates).
+    type: bool
+    default: no
+  reqs:
+    description:
+    - Returns all requisites for a fileset.
     type: bool
     default: no
   fix_type:
@@ -89,6 +94,16 @@ EXAMPLES = r'''
         level of installed filesets for all of the bos.rte filesets
   lpp_facts:
     filesets: bos.rte.*
+- name: Print the fileset facts
+  debug:
+    var: ansible_facts.filesets
+
+- name: Populate fileset facts with the installation state for the most recent
+        level of installed filesets for all of the bos.rte filesets with the
+        requisites
+  lpp_facts:
+    filesets: bos.rte.*
+    req: True
 - name: Print the fileset facts
   debug:
     var: ansible_facts.filesets
@@ -200,6 +215,31 @@ ansible_facts:
               type: list
               elements: str
               sample: ["/etc/objrepos"]
+            requisites:
+               description:
+               - Requisites of the filesets
+               returned: when available
+               type: dict
+               sample: "requisites": { 
+                            "coreq": {
+                                "bos.aso": {
+                                    "name": "bos.aso",
+                                    "level": [
+                                        "7.2.0.0"
+                                    ],
+
+                                    }
+                                }
+                            }
+                        }    
+                            
+            ver_cons_check:
+                description: 
+                - Status of fileset version consistency check
+                returned: always
+                type: str
+                sample:
+                "ver_cons_check": "OK"
     fixes:
       description:
       - Maps the fixes name to the dictionary of filesets.
@@ -254,6 +294,7 @@ ansible_facts:
 '''
 
 from ansible.module_utils.basic import AnsibleModule
+import re
 
 
 LPP_TYPE = {
@@ -264,6 +305,13 @@ LPP_TYPE = {
 }
 
 def list_fixes(module):
+    """
+    List the fixes installed on the system including APAR, technology level
+    service pack.
+    param module: Ansible module argument spec.
+    return: dict fixes
+    """
+
     
     fixes = {}
     cmd = []
@@ -288,19 +336,18 @@ def list_fixes(module):
     cmd = [instfix_path, '-icq']
     if module.params['fix_type']:
         fix_type = module.params['fix_type']
-    if module.params['fixes']:
+    elif module.params['fixes']:
         fixes_list = module.params['fixes']               
-        if len(fixes_list) > 0:                
-                cmdstr = ""    
+        if len(fixes_list) > 0:     
+                cmdstr = ''           
                 for fix in fixes_list:
-                    cmdstr += fix 
+                    cmdstr += fix.strip() + ' '
+                cmdstr.strip()
                 cmd += ['-k', cmdstr]
             
-
     ret, stdout, stderr = module.run_command(cmd)
 
     instfix_stdout = stdout.splitlines()
-
     for line in instfix_stdout:
         raw_fields = line.split(':')
         if len(raw_fields) < 6:
@@ -317,8 +364,7 @@ def list_fixes(module):
                and name.endswith("_ML")) \
            or (fix_type == "all"):
             is_continue = True
-
-        if (fix_type != '' and is_continue == True) or fix_type == '':
+        if (fix_type != '' and is_continue) or fix_type == '':
             if name not in fixes:
                 fixes[name] = {'name': name, 'abstract': abstract, 'filesets': {}}
             if fileset_name not in fixes[name]['filesets']:
@@ -331,6 +377,148 @@ def list_fixes(module):
             fixes[name]['filesets'][fileset_name] = fileset_info
        
     return fixes
+
+
+def list_reqs(name, module):
+      
+    """
+    List the requisites of the filesets 
+    param module: Ansible module argument spec.
+    param name: fileset name for which requisites has to be gathered
+    return: dict requisites
+    """
+    requisites = {}    
+    req_type_list = ["*coreq", "*prereq", "*ifreq", "*instreq" ]
+    i = 0
+    
+    lslpp_path = module.get_bin_path('lslpp', required=True)
+    ''' sample command output 
+    lslpp -pcq bos.perf.tools
+    /usr/lib/objrepos:bos.perf.tools 7.2.5.100:*coreq bos.sysmgt.trace 5.3.0.30 *coreq bos.perf.perfstat 5.3.0.30 *coreq perfagent.tools 5.3.0.50 *coreq bos.perf.pmaix 7.1.3.0 *ifreq bos.adt.include 5.3.0.30 *ifreq bos.mp64 5.3.0.30 *ifreq bos.pmapi.lib 5.3.0.30 *ifreq bos.rte.control 5.3.0.10 *prereq bos.rte.libc 7.1.3.0 
+    /etc/objrepos:bos.perf.tools 7.2.5.100:*coreq bos.sysmgt.trace 5.3.0.30 *coreq bos.perf.perfstat 5.3.0.30 *coreq perfagent.tools 5.3.0.50 *coreq bos.perf.pmaix 7.1.3.0 *ifreq bos.adt.include 5.3.0.30 *ifreq bos.mp64 5.3.0.30 *ifreq bos.pmapi.lib 5.3.0.30 *ifreq bos.rte.control 5.3.0.10 *prereq bos.rte.libc 7.1.3.0 
+    '''
+    cmd = [lslpp_path, '-cpq', name]
+    
+    ret, stdout, stderr = module.run_command(cmd)
+    
+    for line in stdout.splitlines():
+        raw_fields = line.split(':')
+        ''' In cases where requisites are not present, then the length of the raw fields from
+        the output line will be less than 3. Hence continue to the next line as this would not
+        need any processing.
+        
+        '''
+        if len(raw_fields) < 3:
+            continue
+        fields = [field.strip() for field in raw_fields]
+        
+        ''' 3rd field contains the requisites separated by spaces.
+        Parse the requisites and categorize it as coreqs, prereqs, ifreqs.
+        Sample 3rd field from lslpp -cpq 
+        *coreq bos.sysmgt.trace 5.3.0.30 *coreq bos.perf.perfstat 5.3.0.30 *coreq perfagent.tools 5.3.0.50 *coreq bos.perf.pmaix 7.1.3.0 *ifreq bos.adt.include 5.3.0.30 *ifreq bos.mp64 5.3.0.30 *ifreq bos.pmapi.lib 5.3.0.30 *ifreq bos.rte.control 5.3.0.10 *prereq bos.rte.libc 7.1.3.0
+        '''
+        
+        '''Some of the filesets might have no requisites.
+        Example:
+        /usr/lib/objrepos:udapl.rte 7.2.5.100:NONE
+        /etc/objrepos:udapl.rte 7.2.5.100:NONE
+        '''
+        if fields[2] == "NONE":
+           continue    
+       
+        reqs = re.split(r"\s+|{", fields[2])
+        num_reqs = len(reqs)
+        
+
+        ''' Requisites has 3 fields : req_type, fileset name, level.
+        Minimum 1st 2 fields should be present.
+        Sample
+        *coreq bos.sysmgt.trace 5.3.0.30 
+        '''
+        if len(reqs) >= 2:
+            while i < num_reqs:
+                #Reinitialize the local variables
+                req_type = ''
+                fileset = ''
+                level = ''
+                ''' Get the type of requisite, fileset name and the level
+                The values are in order and hence parse through the list
+                and assign the values to the corresponding field names.
+                '''
+                ''' If the requisites is not one of the types :
+                instreq, ifreq, coreq, prereq then we don't need to process further.
+                We continue to next requisite
+                '''
+                if reqs[i] not in req_type_list:
+                    i = i + 1
+                    continue
+                #1st field will be requisite type. ignore '*' in the requisite_type(Eg: *coreq as coreq )
+                req_type = reqs[i][1:]
+                i = i + 1
+                
+                '''2nd field will be fileset name.
+                 This is to fill the fileset name which will be followed by level
+                *coreq bos.sysmgt.trace 5.3.0.30 
+                In  this fileset will "bos.sysmgt.trace "
+                '''
+                fileset = reqs[i]
+                i = i + 1
+                ''' level field may not be present in some cases. Hence
+                only if level field is present update the value.
+                Increment the iterator if the next field doesn't start with
+                the next requisite set of fields and has only level information.
+                (Example: *coreq bos.perf.perfstat)
+                '''
+                if i < num_reqs:
+                    
+                    ''' 3rd field will be fileset level. Sometimes this might be some additional
+                    text followed by the level. So process the additional texts here and get the
+                    level .
+                    '''
+                    if reqs[i] not in req_type_list:
+                        ''' In some cases, prerequisites might be listed in brackets like below:
+                        * *ifreq bos.rte.libc (5.2.0.0) 5.2.0.41 *ifreq bos.rte.libc (5.3.0.0) 5.3.0.1 
+                        In this case, both will be listed as part of levels.
+                        '''
+                        if '(' in reqs[i] or ')' in reqs[i]: 
+                            level += reqs[i]
+                            i = i + 1
+                      
+                        level += reqs[i]
+                        i = i + 1
+                
+                # create a dictionary for each requisite type if not present already.    
+                if req_type not in requisites:
+                   requisites[req_type] = {}
+                if fileset not in requisites[req_type]:
+                   requisites[req_type][fileset] = {}  
+                   requisites[req_type][fileset]["level"] = [level]
+                else:
+                    requisites[req_type][fileset]["level"].append(level)
+               
+                requisites[req_type][fileset]["name"] = fileset
+            
+    return requisites   
+
+def fileset_consistency_check(module, name):
+    """
+    Check the fileset consistency
+    param module: Ansible module argument spec.
+    param name: fileset name for which fileset consistency check has to be done
+    return: status of fileset version consistency check
+            'OK' , if success
+            'NOT OK', if failure
+    """
+    lppchk_path = module.get_bin_path('lppchk', required=True)
+    cmd = "%s -v %s" % (lppchk_path, name)
+    cons_check = 'UNKNOWN'
+    ret, stdout, stderr = module.run_command(cmd)
+    if ret == 0:
+        cons_check = "OK"
+    else:
+        cons_check = "NOT OK"
+    return cons_check
+     
     
 def main():
     module = AnsibleModule(
@@ -341,7 +529,8 @@ def main():
             all_updates=dict(type='bool', default=False),
             base_levels_only=dict(type='bool', default=False),
             fixes=dict(type='list', elements='str'),
-            fix_type=dict(type='str', choices=['apar', 'technology_level', 'service_pack', 'sp', 'tl', 'all'])
+            fix_type=dict(type='str', choices=['apar', 'technology_level', 'service_pack', 'sp', 'tl', 'all']),
+            reqs=dict(type='bool', default=False)
         ),
         mutually_exclusive=[
             ['filesets', 'bundle'],
@@ -384,7 +573,8 @@ def main():
         level = fields[2]
 
         if name not in filesets:
-            filesets[name] = {'name': name, 'levels': {}}
+            cons_check = fileset_consistency_check(module, name)
+            filesets[name] = {'name': name, 'levels': {}, 'ver_cons_check': cons_check}
 
         # There can be multiple levels for the same fileset if all_updates
         # is set (otherwise only the most recent level is returned).
@@ -407,12 +597,13 @@ def main():
             info['description'] = fields[6]
             info['emgr_locked'] = fields[7] == 'EFIXLOCKED'
             info['sources'] = [fields[0]]
+            if module.params["reqs"] == True :
+                info["requisites"] = list_reqs(name, module)
 
             filesets[name]['levels'][level] = info
         else:
             filesets[name]['levels'][level]['sources'].append(fields[0])
 
- 
     fixes = {}
     if module.params["fix_type"] or module.params["fixes"]:
         fixes = list_fixes(module)
