@@ -239,18 +239,26 @@ ansible_facts:
           description: Number of Configured LPARs.
           returned: when available
           type: int
-        inc_core_crypto:
-          description: In-Core Crypto Acceleration.
+        inc_core_crypto_capable:
+          description: Capability of In-Core Crypto Acceleration.
           returned: always
-          type: str
-        nxcrypto_acc:
-          description: NX Crypto Acceleration.
+          type: bool
+        inc_core_crypto_enabled:
+          description: Enablement of In-Core Crypto Acceleration.
           returned: always
-          type: str 
+          type: bool
+        nxcrypto_acc_capable:
+          description: Capability of NX Crypto Acceleration.
+          returned: always
+          type: bool 
+        nxcrypto_acc_enabled:
+          description: Enablement of NX Crypto Acceleration.
+          returned: always
+          type: bool 
         full_coredump:
           description: Full core dump status.
           returned: always
-          type: str   
+          type: bool   
         proc_imp_mode:
           description: Processor Implementation Mode.
           returned: always
@@ -326,9 +334,9 @@ descr2key = {
     "Number of Configured LPARs": ('num_lpars', 'int'),
     "Processor Implementation Mode": ('proc_imp_mode', 'str'),
     "Processor Type": ('proc_type', 'str'),
-    "NX Crypto Acceleration": ('nxcrypto_acc', 'str'),
-    "In-Core Crypto Acceleration": ('inc_core_crypto', 'str'),
-    "Full Core": ('full_coredump', 'str'),
+    "NX Crypto Acceleration": ('nxcrypto_acc', 'bool'),
+    "In-Core Crypto Acceleration": ('inc_core_crypto', 'bool'),
+    "Full Core": ('full_coredump', 'bool'),
     "oslevel": ('oslevel', 'str')
 }
 
@@ -401,7 +409,36 @@ def main():
                 lparstat[id] = float(val.split()[0].strip())
             elif vtype == 'percent':
                 lparstat[id] = float(val.strip().rstrip('%'))
-
+            elif vtype == 'bool':
+                if id == "full_coredump":
+                    if(val.strip() == "false"):
+                        lparstat[id] = False
+                    else:
+                        lparstat[id] = True
+                elif id == "nxcrypto_acc":
+                    nxcrypto_val = val.strip()
+                    if "not Capable" in nxcrypto_val:
+                        lparstat['nxcrypto_acc_capable'] = False
+                    else:
+                        lparstat['nxcrypto_acc_capable'] = True
+                    if "not Enabled" in nxcrypto_val:
+                        lparstat['nxcrypto_acc_enabled'] = False
+                    else:
+                        lparstat['nxcrypto_acc_enabled'] = True
+                elif id == "inc_core_crypto":
+                    inc_crypto_val = val.strip()
+                    if "not Capable" in inc_crypto_val:
+                        lparstat['inc_core_crypto_capable'] = False
+                    else:
+                        lparstat['inc_core_crypto_capable'] = True
+                    if "not Enabled" in inc_crypto_val:
+                        lparstat['inc_core_crypto_enabled'] = False
+                    else:
+                        lparstat['inc_core_crypto_enabled'] = True
+                    
+                
+                    
+ 
     module.exit_json(ansible_facts=dict(lpar=lparstat))
 
 
