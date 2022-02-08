@@ -20,6 +20,7 @@
 
 # Setup
 
+
     - name: Setup- Remove the spot resource.
       ibm.power_aix.nim_resource:
         action: absent
@@ -34,7 +35,7 @@
       register: result
     - debug: var=result
 
-# Tests
+# Tests. Expected functions.
 
     - name: Create/define an lpp_source NIM resource object from the 
             software in the system.
@@ -69,7 +70,7 @@
     - name: Verify the resource is exist.
       assert:
         that:
-          - "{{ result.nim_resource_found}}""
+          - "{{ result.nim_resource_found }}"
         fail_msg: "The member {{ spot_name_v }} was not found"
 
     - name: Try to show a NIM resource object that does not exist.
@@ -86,6 +87,19 @@
         object_type: spot
       register: result
     - debug: var=result
+
+    - name: Show only the type lpp_source NIM resource objects.
+      ibm.power_aix.nim_resource:
+        action: show
+        object_type: lpp_source
+      register: result
+    - debug: var=result
+
+    - name: Verify the resource is exist.
+      assert:
+        that:
+          - "{{ result.nim_resource_found }}"
+        fail_msg: "Problem: No lpp_source object types found."
 
     - name: Remove a NIM spot object resource.
       ibm.power_aix.nim_resource:
@@ -112,6 +126,56 @@
         name: "{{ spot_name_v }}"
       register: result
     - debug: var=result
+
+# Tests. Run expected functions with check_mode set.
+
+    - name: Show a NIM resource object with check_mode set.
+      ibm.power_aix.nim_resource:
+        action: show
+        name: "{{ spot_name_v }}"
+      check_mode: true
+      register: result
+    - debug: var=result
+
+    - name: Assert if preview mode is not shown
+      assert:
+        that:
+          - result.msg is search("preview")
+        fail_msg: "The 'show' action is not working in check mode"
+
+    - name: Create/define an lpp_source NIM resource object from the 
+            software in the system with check_mode set.
+      ibm.power_aix.nim_resource:
+        action: present
+        name: "{{ lpp_source_v }}"
+        object_type: lpp_source
+        attributes:
+          source: "{{ software_lpp_source }}"
+          location: "{{ lpp_source_location}}"
+      check_mode: true
+      register: result
+    - debug: var=result
+
+    - name: Assert if preview mode is not shown
+      assert:
+        that:
+          - result.msg is search("preview")
+        fail_msg: "The 'present' action is not working in check mode"
+
+    - name: Remove the spot resource, with check_mode set.
+      ibm.power_aix.nim_resource:
+        action: absent
+        name: "{{ spot_name_v }}"
+      check_mode: true
+      register: result
+    - debug: var=result
+
+    - name: Assert if preview mode is not shown
+      assert:
+        that:
+          - result.msg is search("preview")
+        fail_msg: "The 'remove' action is not working in check mode"
+
 
 #    - name: End the playbook 1
 #      meta: end_host

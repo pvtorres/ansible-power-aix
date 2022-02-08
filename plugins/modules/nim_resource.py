@@ -1,4 +1,4 @@
-#!/usr/bin/python
+ #!/usr/bin/python
 # -*- coding: utf-8 -*-
 
 # Copyright: (c) 2022- IBM, Inc
@@ -25,15 +25,16 @@ author:
 module: nim_resource
 short_description: show/define/delete nim object resources
 description:
-- This module facilitates the display/creation/removal of nim resources 
-- Root user is required.
+- This module facilitates the display/creation/removal of nim resource objects.
+- Root user access is required.
+- Not all the module variables are needed for all the operations.
 options:
   action:
     description:
     - Specifies the action to be performed:
-    - C(show) shows  NIM resource object or a NIM resource provied by I(name)
+    - C(show) shows NIM resource object or a NIM resource provied by I(name)
       into a "nim_resources" type=dic .
-    - C(present) define (create) a NIM resource object with provied I(name),
+    - C(present) define (create) a NIM resource object with provided I(name),
       I(object_type) and I(attributes).
     - C(absent) remove a NIM resource object with provided I(name).
     type: str
@@ -92,7 +93,7 @@ EXAMPLES = r'''
         source: /software/AIX7300
         location: /nim1/copy_AIX7300_resource
 
-  - name: Define a NIM lpp_source resource from a directory that
+  - name: Define a NIM lpp_source resource object from a directory that
           contains the installation images.
     ibm.power_aix.nim_resource:
       action: present
@@ -120,6 +121,17 @@ EXAMPLES = r'''
     ibm.power_aix.nim_resource:
       action: absent
       name: spot_730
+
+  - name: Create a NIM resource group object.
+    ibm.power_aix.nim_resource:
+      action: present
+      name: ResGrp730
+      object_type: res_group
+      attributes:
+        lpp_source: lpp_730
+        spot: spot_730
+        bosinst_data: bosinst_data730
+        comments: "730 Resources"
 
 '''
 
@@ -182,6 +194,10 @@ def res_show(module):
 
     return_code, stdout, stderr = module.run_command(cmd)
 
+    if module.check_mode:
+        results['msg'] = 'Command \'{0}\' preview mode, execution skipped.'.format(cmd)
+        return 0
+
     results['stderr'] = stderr
     results['stdout'] = stdout
     results['cmd'] = cmd
@@ -240,6 +256,10 @@ def res_present(module):
 
     return_code, stdout, stderr = module.run_command(cmd)
 
+    if module.check_mode:
+        results['msg'] = 'Command \'{0}\' preview mode, execution skipped.'.format(cmd)
+        return 0
+
     results['stderr'] = stderr
     results['stdout'] = stdout
     results['cmd'] = cmd
@@ -277,6 +297,10 @@ def res_absent(module):
     cmd = '/usr/sbin/nim -o remove {0}'.format(name)
     msg = ''
     name = module.params['name']
+
+    if module.check_mode:
+        results['msg'] = 'Command \'{0}\' in preview mode, execution skipped.'.format(cmd)
+        return 0
 
     return_code, stdout, stderr = module.run_command(cmd)
 
@@ -341,8 +365,7 @@ def main():
             object_type=dict(type='str'),
             attributes=dict(type='dict'),
         ),
-# TODO support check_mode ??
-        supports_check_mode=False
+        supports_check_mode=True
     )
 
     results = dict(
