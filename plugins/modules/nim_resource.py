@@ -62,7 +62,7 @@ options:
       U(https://www.ibm.com/docs/en/aix/7.2?topic=management-using-nim-resources)
     type: str
     default: None
-    required: false
+    required: true for I(state=present)
   attributes:
     description:
     - Specifies the attribute-value pairs for I(state=present) or I(state=show)
@@ -102,7 +102,7 @@ EXAMPLES = r'''
       attributes:
         location: /nim1/copy_AIX7300_resource
 
-  - name: Define a NIM spot (Shared product Object Tree) resource
+  - name: Define a NIM spot (Shared Product Object Tree) resource
           using a defined lpp_source.
     ibm.power_aix.nim_resource:
       action: present
@@ -153,6 +153,27 @@ stderr:
     description: The standard error.
     returned: If the command failed.
     type: str
+nim_resource_found:
+    description: Return if a queried object resource exist.
+    returned: for C(show), 1 if an object is found, 0 if it is not.
+    type: bool
+nim_resources:
+    description: Dictionary output with the NIM resource object information.
+    returned: for C(show)
+    type: dict
+    sample:{
+           lpp_source_test:
+             'Rstate': ready for use,
+             'alloc_count': '0',
+             'arch': power,
+             'class': resources,
+             'location': /nim1/lpp_source_test4,
+             'prev_state': unavailable for use,
+             'server': master,
+             'simages': 'yes',
+             'type': lpp_source,
+           }
+
 '''
 
 '''
@@ -171,7 +192,7 @@ def res_show(module):
     note:
         Exits with fail_json in case of error
     return:
-        Message for successful command
+        updated results dictionary.
     '''
 
     global results
@@ -192,11 +213,11 @@ def res_show(module):
     if name:
         cmd += ' ' + name
 
-    return_code, stdout, stderr = module.run_command(cmd)
-
     if module.check_mode:
         results['msg'] = 'Command \'{0}\' preview mode, execution skipped.'.format(cmd)
-        return 0
+        return
+
+    return_code, stdout, stderr = module.run_command(cmd)
 
     results['stderr'] = stderr
     results['stdout'] = stdout
@@ -207,7 +228,7 @@ def res_show(module):
     if return_code != 0:
 
         # 0042-053 The NIM objefct is not there.
-        pattern = "0042-053"
+        pattern = r"0042-053"
         found = re.search(pattern, stderr)
 
         if found:
@@ -220,7 +241,7 @@ def res_show(module):
         results['nim_resources'] = build_dic(stdout)
         results['nim_resource_found'] = '1'
 
-    return 0
+    return
 
 def res_present(module):
     '''
@@ -231,13 +252,12 @@ def res_present(module):
     note:
         Exits with fail_json in case of error
     return:
-        Message for successful command
+        updated results dictionary.
     '''
 
     cmd = '/usr/sbin/nim -a server=master -o define '
     msg = ''
     opts = ""
-    changed = True
 
     name = module.params['name']
     object_type = module.params['object_type']
@@ -248,17 +268,17 @@ def res_present(module):
 
     if attributes is not None:
         for attr, val in attributes.items():
-             opts += " -a %s=\"%s\" " % (attr, val)
+             opts += " -a {0}=\"{1}\" ".format(attr, val)
         cmd += opts
 
     if name:
         cmd += ' ' + name
 
-    return_code, stdout, stderr = module.run_command(cmd)
-
     if module.check_mode:
         results['msg'] = 'Command \'{0}\' preview mode, execution skipped.'.format(cmd)
-        return 0
+        return
+
+    return_code, stdout, stderr = module.run_command(cmd)
 
     results['stderr'] = stderr
     results['stdout'] = stdout
@@ -267,7 +287,7 @@ def res_present(module):
     if return_code != 0:
 
        # 0042-081 The resource already exists on "master"
-        pattern = "0042-081"
+        pattern = r"0042-081"
         found = re.search(pattern, stderr)
         if not found:
             results['rc'] = return_code
@@ -275,11 +295,12 @@ def res_present(module):
             module.fail_json(**results)
         else:
             results['msg'] = 'Resource already exist'
-            changed = False
+
     else:
         results['msg'] = 'Creation of resource {0} was a success'.format(name)
+        results['changed'] = True
 
-    return 0
+    return
 
 def res_absent(module):
     '''
@@ -290,17 +311,16 @@ def res_absent(module):
     note:
         Exits with fail_json in case of error
     return:
-        Message for successfull command
+        updated results dictionary.
     '''
 
     name = module.params['name']
     cmd = '/usr/sbin/nim -o remove {0}'.format(name)
     msg = ''
-    name = module.params['name']
 
     if module.check_mode:
         results['msg'] = 'Command \'{0}\' in preview mode, execution skipped.'.format(cmd)
-        return 0
+        return
 
     return_code, stdout, stderr = module.run_command(cmd)
 
@@ -311,7 +331,7 @@ def res_absent(module):
     if return_code != 0:
 
         # 0042-053 The NIM objefct is not there.
-        pattern = "0042-053"
+        pattern = r"0042-053"
         found = re.search(pattern, stderr)
 
         if found:
@@ -323,8 +343,9 @@ def res_absent(module):
 
     else:
         results['msg'] = 'Resource {0} was removed.'.format(name)
+        results['changed'] = True
 
-    return 0
+    return
 
 
 def build_dic(stdout):

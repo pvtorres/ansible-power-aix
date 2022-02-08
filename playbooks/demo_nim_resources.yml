@@ -17,9 +17,7 @@
   - ibm.power_aix
   tasks:
 
-
 # Setup
-
 
     - name: Setup- Remove the spot resource.
       ibm.power_aix.nim_resource:
