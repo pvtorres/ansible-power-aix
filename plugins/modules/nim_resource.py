@@ -1,4 +1,4 @@
- #!/usr/bin/python
+#!/usr/bin/python
 # -*- coding: utf-8 -*-
 
 # Copyright: (c) 2022- IBM, Inc
@@ -18,73 +18,61 @@ ANSIBLE_METADATA = {'metadata_version': '1.1',
                     'status': ['preview'],
                     'supported_by': 'community'}
 
+
 DOCUMENTATION = r'''
 ---
 author:
 - AIX Development Team (@pvtorres1703)
 module: nim_resource
-short_description: show/define/delete nim object resources
+short_description: show/define/delete NIM resource object(s).
 description:
-- This module facilitates the display/creation/removal of nim resource objects.
-- Root user access is required.
-- Not all the module variables are needed for all the operations.
+- This module facilitates the display, creation or removal of NIM resource objects.
+requirements:
+- AIX >= 7.1 TL3
+- Python >= 2.7
 options:
   action:
     description:
-    - Specifies the action to be performed:
-    - C(show) shows NIM resource object or a NIM resource provied by I(name)
-      into a "nim_resources" type=dic .
-    - C(present) define (create) a NIM resource object with provided I(name),
-      I(object_type) and I(attributes).
-    - C(absent) remove a NIM resource object with provided I(name).
+    - Specifies the action to be performed.
+    - C(show) shows all NIM resource objects. Can be used with options I(name) or I(object_type).
+    - C(present) define (create) a NIM resource object. It requires options I(name), I(object_type) and I(attributes).
+    - C(absent) remove a NIM resource object. It requires option I(name).
     type: str
     choices: [ show, present, absent ]
-    default: None
+    default: no
     required: true
   name:
     description:
     - Specifies the NIM object name.
     type: str
-    default: None
-    required: true
+    default: no
+    required: false
   object_type:
     description:
-    - Type of the resource for action I(state=present), I(state=absent),
-      I(state=show).
-    - Example of the object_types:
-      -- lpp_source
-      -- spot
-      -- bosinst_data
-      -- mksysb
-      -- fb_script
-      -- res_group
-    - For details of the supported resources, refer to the IBM documentation at
+    - NIM resource object's type.
+    - Required for actions I(state=present) or I(state=absent).
+    - Optional for I(state=show).
+    - For details of all possible NIM resources objects, refer to the IBM documentation at
       U(https://www.ibm.com/docs/en/aix/7.2?topic=management-using-nim-resources)
+    choices: [ lpp_source, spot, bosinst_data, mksysb, fb_script, res_group ]
     type: str
-    default: None
-    required: true for I(state=present)
+    default: no
+    required: false
   attributes:
     description:
-    - Specifies the attribute-value pairs for I(state=present) or I(state=show)
-    - Examples:
-      - source: Source device, absolute path for the images or ISO image to
-                create a copy to the "location"
-      - location: Specifies directory that contatins the code to define
-                the resource.
-    default: None
-    required: None
-
+    - Specifies the attribute-value pairs required for I(state=present) or I(state=show)
+    type: dict
+    default: no
+    required: false
 '''
 
-
 EXAMPLES = r'''
-
   - name: Show all NIM resource objects.
     ibm.power_aix.nim_resource:
       action: show
 
   - name: Create a copy of the images from source to location and
-          define a NIM lpp_source resource from the location.
+          define a NIM lpp_source resource from that location.
     ibm.power_aix.nim_resource:
       action: present
       name: lpp_730
@@ -94,7 +82,7 @@ EXAMPLES = r'''
         location: /nim1/copy_AIX7300_resource
 
   - name: Define a NIM lpp_source resource object from a directory that
-          contains the installation images.
+          contains the images.
     ibm.power_aix.nim_resource:
       action: present
       name: lpp_730
@@ -112,16 +100,6 @@ EXAMPLES = r'''
         source: lpp_730
         location: /nim1/spot_730_resource
 
-  - name: Show a NIM resource object.
-    ibm.power_aix.nim_resource:
-      action: show
-      name: lpp_730
-
-  - name: Remove a resource NIM object.
-    ibm.power_aix.nim_resource:
-      action: absent
-      name: spot_730
-
   - name: Create a NIM resource group object.
     ibm.power_aix.nim_resource:
       action: present
@@ -132,6 +110,20 @@ EXAMPLES = r'''
         spot: spot_730
         bosinst_data: bosinst_data730
         comments: "730 Resources"
+
+  - name: Show all the defined NIM resource objects.
+    ibm.power_aix.nim_resource:
+      action: show
+
+  - name: Show a specific NIM resource object.
+    ibm.power_aix.nim_resource:
+      action: show
+      name: lpp_730
+
+  - name: Remove a NIM resource object.
+    ibm.power_aix.nim_resource:
+      action: absent
+      name: spot_730
 
 '''
 
@@ -147,36 +139,38 @@ rc:
     type: int
 stdout:
     description: The standard output.
-    returned: If the command failed.
+    returned: always
     type: str
 stderr:
     description: The standard error.
-    returned: If the command failed.
+    returned: always
+    type: str
+cmd:
+    description: Command executed.
+    returned: always
     type: str
 nim_resource_found:
     description: Return if a queried object resource exist.
-    returned: for C(show), 1 if an object is found, 0 if it is not.
+    returned: If I(state=show).
     type: bool
 nim_resources:
     description: Dictionary output with the NIM resource object information.
-    returned: for C(show)
+    returned: If I(state=show).
     type: dict
-    sample:{
-           lpp_source_test:
-             'Rstate': ready for use,
-             'alloc_count': '0',
-             'arch': power,
-             'class': resources,
-             'location': /nim1/lpp_source_test4,
-             'prev_state': unavailable for use,
-             'server': master,
-             'simages': 'yes',
-             'type': lpp_source,
-           }
-
-'''
-
-'''
+    sample:
+        "nim_resources": {
+            "lpp_source_test": {
+                "Rstate": "ready for use",
+                "alloc_count": "0",
+                "arch": "power",
+                "class": "resources",
+                "location": "/nim1/lpp_source_test4",
+                "prev_state": "unavailable for use",
+                "server": "master",
+                "simages": "yes",
+                "type": "lpp_source",
+            }
+        }
 
 '''
 
