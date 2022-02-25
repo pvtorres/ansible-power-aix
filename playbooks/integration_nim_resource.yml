@@ -1,0 +1,280 @@
+---
+- name: "Integration tests for the nim_resource module"
+  hosts: nim1
+  remote_user: root
+  gather_facts: false
+  vars:
+
+    spot_name_v: spot_test4
+    spot_final_location_v: /nim1/spot_test4_from_lpp_source
+    lpp_source_v: lpp_source_test4
+    software_lpp_source: /nim1/lpp_source
+    lpp_source_location: /nim1/lpp_source_test4
+
+    enable_notifications_v: false
+    token_v: "T0JA1U9GV/B02N6FABFT7/XAn74FHu91zX3ASyrjeKEfty"
+
+  collections:
+    - ibm.power_aix
+  tasks:
+
+    - name: nim_resource tests STARTED
+      community.general.slack:
+        token: "{{ token_v }}"
+        channel: '#test_trello_pedro'
+        color: good
+        msg: 'Test- nim_resources tests STARTED'
+      when: enable_notifications_v
+
+# --- Setup
+
+    - name: Setup- Remove the spot resource.
+      nim_resource:
+        action: delete
+        name: "{{ spot_name_v }}"
+      register: result
+
+    - name: Display result
+      debug: var=result
+
+    - name: Setup- Remove the lpp_source.
+      nim_resource:
+        action: delete
+        name: "{{ lpp_source_v }}"
+      register: result
+
+    - name: Display result
+      debug: var=result
+
+# --- Tests  for action:create
+
+    - name: TEST1. Create a lpp_source NIM resource object from the
+            software in the system.
+      nim_resource:
+        action: create
+        name: "{{ lpp_source_v }}"
+        object_type: lpp_source
+        attributes:
+          source: "{{ software_lpp_source }}"
+          location: "{{ lpp_source_location }}"
+      register: result
+
+    - name: Display result
+      debug: var=result
+
+    - name: Verify "{{ lpp_source_v }}" was created.
+      shell:
+        cmd: /usr/sbin/lsnim "{{ lpp_source_v }}"
+      changed_when: false
+      register: result
+
+    - name: TEST2. Create a spot resource object from an lpp_source resource object.
+      nim_resource:
+        action: create
+        name: "{{ spot_name_v }}"
+        object_type: spot
+        attributes:
+          source: "{{ lpp_source_v }}"
+          location: "{{ spot_final_location_v }}"
+      register: result
+
+    - name: Display result
+      debug: var=result
+
+    - name: Verify "{{ spot_name_v }}" was created.
+      shell:
+        cmd: /usr/sbin/lsnim "{{ spot_name_v }}"
+      changed_when: false
+      register: result
+
+    - name: Test- Create nim resources tests PASSED
+      community.general.slack:
+        token: "{{ token_v }}"
+        channel: '#test_trello_pedro'
+        color: good
+        msg: 'Test- Create nim resources tests PASSED'
+      when: enable_notifications_v
+
+# --- Tests for action:show
+
+    - name: TEST6. Show a NIM resource object.
+      nim_resource:
+        action: show
+        name: "{{ spot_name_v }}"
+      register: result
+
+    - name: Display result
+      debug: var=result
+
+    - name: Assert if "{{ spot_name_v }}" is not shown.
+      assert:
+        that:
+          - result.nim_resource_found
+          - "result.nim_resources.{{ spot_name_v }}"
+        fail_msg: "The member {{ spot_name_v }} was not found"
+
+    - name: TEST7. Try to show a NIM resource object that does not exist.
+            (do not return an error)
+      nim_resource:
+        action: show
+        name: i_dont_exist
+      register: result
+
+    - name: Display result
+      debug: var=result
+
+    - name: Assert if i_dont_exist object is found.
+      assert:
+        that:
+          - result.nim_resource_found == false
+        fail_msg: "The member i_dont_exist was not found"
+
+    - name: TEST8. Show/display all the NIM resource objects that are type spot.
+      nim_resource:
+        action: show
+        object_type: spot
+      register: result
+
+    - name: Display result
+      debug: var=result
+
+    - name: Assert if at least one NIM resource objects of type spot are not shown.
+      assert:
+        that:
+          - result.nim_resource_found
+          - "result.nim_resources.{{ spot_name_v }}.type == 'spot'"
+        fail_msg: "Resources of type spot were not found"
+
+    - name: TEST9. Show only the type lpp_source NIM resource objects.
+      nim_resource:
+        action: show
+        object_type: lpp_source
+      register: result
+
+    - name: Display result
+      debug: var=result
+
+    - name: Assert if we can not find a NIM resource objects of type lpp_source.
+      assert:
+        that:
+          - result.nim_resource_found
+          - "result.nim_resources.{{ lpp_source_v }}.type == 'lpp_source'"
+        fail_msg: "Resources of type lpp_source were not found"
+
+    - name: Test- Show nim resources tests PASSED
+      community.general.slack:
+        token: "{{ token_v }}"
+        channel: '#test_trello_pedro'
+        color: good
+        msg: 'Test- Show nim resources tests PASSED'
+      when: enable_notifications_v
+
+# -- Tests for action:delete
+
+    - name: TEST11. Delete a spot NIM resource object.
+      nim_resource:
+        action: delete
+        name: "{{ spot_name_v }}"
+      register: result
+
+    - name: Display result
+      debug: var=result
+
+    - name: Try to show the NIM resource object that was removed.
+      nim_resource:
+        action: show
+        name: "{{ spot_name_v }}"
+      register: result
+
+    - name: Display result
+      debug: var=result
+
+    - name: Assert if the NIM resource object is found.
+      assert:
+        that:
+          - result.stderr is search("0042-053")
+          - result.nim_resource_found == false
+        fail_msg: "The spot NIM resource object {{ spot_name_v }} was not removed."
+
+    - name: TEST12. Delete a spot NIM resource object again (idempotency)
+      nim_resource:
+        action: delete
+        name: "{{ spot_name_v }}"
+      register: result
+
+    - name: Display result
+      debug: var=result
+
+    - name: Test- Delete nim resources tests PASSED
+      community.general.slack:
+        token: "{{ token_v }}"
+        channel: '#test_trello_pedro'
+        color: good
+        msg: 'Test- Delete nim resources tests PASSED'
+      when: enable_notifications_v
+
+# Tests.functions with check_mode set. Expect no actions.
+
+    - name: TEST15 Show a NIM resource object with check_mode set.
+      nim_resource:
+        action: show
+        name: "{{ spot_name_v }}"
+      check_mode: true
+      register: result
+
+    - name: Display result
+      debug: var=result
+
+    - name: Assert if preview mode is not shown
+      assert:
+        that:
+          - result.msg is search("preview")
+        fail_msg: "The 'show' action is not working in check mode"
+
+    - name: TEST16. Create an lpp_source NIM resource object from the
+            software in the system with check_mode set.
+      nim_resource:
+        action: create
+        name: "{{ lpp_source_v }}"
+        object_type: lpp_source
+        attributes:
+          source: "{{ software_lpp_source }}"
+          location: "{{ lpp_source_location }}"
+      check_mode: true
+      register: result
+
+    - name: Display result
+      debug: var=result
+
+    - name: Assert if preview mode is not shown
+      assert:
+        that:
+          - result.msg is search("preview")
+        fail_msg: "The 'create' action is not working in check mode"
+
+    - name: TEST17. Remove the spot resource, with check_mode set.
+      nim_resource:
+        action: delete
+        name: "{{ spot_name_v }}"
+      check_mode: true
+      register: result
+
+    - name: Display result
+      debug: var=result
+
+    - name: Assert if preview mode is not shown
+      assert:
+        that:
+          - result.msg is search("preview")
+        fail_msg: "The 'remove' action is not working in check mode"
+
+    - name: Tests-  nim_resource all tests SUCCESSFUL
+      community.general.slack:
+        token: "{{ token_v }}"
+        channel: '#test_trello_pedro'
+        color: good
+        msg: 'Test-  nim_resource tests -  SUCCESS'
+      when: enable_notifications_v
+
+#    - name: End the playbook 1
+#      meta: end_host
