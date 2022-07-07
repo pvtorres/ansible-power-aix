@@ -19,7 +19,7 @@ module: lpar_facts
 short_description: Reports logical partition (LPAR) related information as facts.
 description:
 - Lists and reports information related to logical partition (LPAR) in Ansible facts.
-version_added: '2.9'
+version_added: '1.1.0'
 requirements:
 - AIX >= 7.1 TL3
 - Python >= 2.7
@@ -250,35 +250,35 @@ ansible_facts:
         nxcrypto_acc_capable:
           description: Capability of NX Crypto Acceleration.
           returned: always
-          type: bool 
+          type: bool
         nxcrypto_acc_enabled:
           description: Enablement of NX Crypto Acceleration.
           returned: always
-          type: bool 
+          type: bool
         full_coredump:
           description: Full core dump status.
           returned: always
-          type: bool   
+          type: bool
         proc_imp_mode:
           description: Processor Implementation Mode.
           returned: always
-          type: str   
+          type: str
         proc_type:
           description: Processor Type.
           returned: always
-          type: str   
+          type: str
         oslevel:
           description: Operating system level.
           returned: always
           type: dict
           elements: dict
-          contains: 
+          contains:
            oslevel:
               description:
               - OperatingSystemBaseVersion TechnologyLevel ServicePack Build (vrmf).
               returned: always
               type: dict
-              sample: '"oslevel": { "build": 2147, "sp": 3, "tl": 2, "base": "7.2.0.0" }' 
+              sample: '"oslevel": { "build": 2147, "sp": 3, "tl": 2, "base": "7.2.0.0" }'
 '''
 
 from ansible.module_utils.basic import AnsibleModule
@@ -342,7 +342,10 @@ descr2key = {
 
 
 def main():
-    module = AnsibleModule(argument_spec=dict())
+    module = AnsibleModule(
+        argument_spec=dict(),
+        supports_check_mode=True
+    )
 
     lparstat_path = module.get_bin_path('lparstat', required=True)
     prtconf_path = module.get_bin_path('prtconf', required=True)
@@ -350,18 +353,18 @@ def main():
     cmd = [lparstat_path, '-is']
     ret, stdout, stderr = module.run_command(cmd, check_rc=True)
     ''' prtconf to get the following:
-     "NX Crypto Acceleration" 
-     "In-Core Crypto Acceleration" 
-     "Processor Implementation Mode" 
+     "NX Crypto Acceleration"
+     "In-Core Crypto Acceleration"
+     "Processor Implementation Mode"
      "Processor Type"
-     "Full Core"' 
+     "Full Core"'
     '''
-    cmd = [prtconf_path] 
+    cmd = [prtconf_path]
     ret1, stdout1, stderr1 = module.run_command(cmd, check_rc=True)
     stdout = stdout + "\n" + stdout1
-    
-    '''Get oslevel and print in the format of 
-        base level, 
+
+    '''Get oslevel and print in the format of
+        base level,
         technology level,
         service pack,
         build
@@ -369,7 +372,7 @@ def main():
     cmd = [oslevel_path, '-s']
     ret1, stdout1, stderr1 = module.run_command(cmd, check_rc=True)
     stdout1 = "oslevel: " + stdout1
-    
+
     stdout = stdout + "\n" + stdout1
     lparstat = {}
     for line in stdout.splitlines():
@@ -384,20 +387,19 @@ def main():
             id, vtype = key
             if vtype == 'str':
                 if(id == "oslevel"):
-                    oslevel_val = {}
                     vrmf = val.split('-')
                     if len(vrmf) == 4:
                         # formatting the base level in the format 7.2.0.0
                         baselevel = "%s.%s.%s.%s" % \
-                        (int(int(vrmf[0])/1000) % 10, int(int(vrmf[0])/100) % 10, \
-                         int(int(vrmf[0])/10) % 10, int(vrmf[0]) % 10)
+                            (int(int(vrmf[0]) / 1000) % 10, int(int(vrmf[0]) / 100) % 10,
+                             int(int(vrmf[0]) / 10) % 10, int(vrmf[0]) % 10)
                         lparstat[id] = {
-                         'base': baselevel,
-                         'tl': int(vrmf[1]),
-                         'sp': int(vrmf[2]),
-                         'build': int(vrmf[3])
+                            'base': baselevel,
+                            'tl': int(vrmf[1]),
+                            'sp': int(vrmf[2]),
+                            'build': int(vrmf[3])
                         }
-                else: 
+                else:
                     lparstat[id] = val
             elif vtype == 'int':
                 lparstat[id] = int(val)
@@ -435,10 +437,7 @@ def main():
                         lparstat['inc_core_crypto_enabled'] = False
                     else:
                         lparstat['inc_core_crypto_enabled'] = True
-                    
-                
-                    
- 
+
     module.exit_json(ansible_facts=dict(lpar=lparstat))
 
 
