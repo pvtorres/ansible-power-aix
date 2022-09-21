@@ -5,6 +5,26 @@
 Releases
 ========
 
+Version 1.5.1
+-------------
+Notes
+  * issue 123: blah blah
+
+Availability
+  * `Automation Hub v1.5.1`_
+  * `Galaxy v1.5.1`_
+  * `GitHub v1.5.1`_
+
+.. _Automation Hub v1.5.1:
+   https://cloud.redhat.com/ansible/automation-hub/ibm/power_aix
+
+.. _Galaxy v1.5.1:
+   https://galaxy.ansible.com/download/ibm-power_aix-1.5.1.tar.gz
+
+.. _GitHub v1.5.1:
+   https://github.com/IBM/ansible-power-aix/releases/download/v1.5.0/ibm-power_aix-1.5.1.tar.gz
+
+
 Version 1.5.0
 -------------
 Notes
